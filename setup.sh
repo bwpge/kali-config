@@ -151,14 +151,13 @@ if [ $do_install_go = 1 ]; then
         go version
     else
         did_change=1
-        _task "Removing previous go installation"
         sudo rm -rf /opt/go
+
         _task "Downloading latest golang release"
         GOLANG_LATEST="$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep 'linux-amd64' | head -n1 | awk '{print $2}' | sed 's/"\(.*\)",/\1/')"
         curl -fsSLo golang.tar.gz "https://go.dev/dl/$GOLANG_LATEST"
         _task "Installing golang"
         sudo tar -C /opt -xzf golang.tar.gz
-        _task "Removing install files"
         rm golang.tar.gz
 
         if [ -z "$(grep 'export PATH=$PATH:/opt/go/bin' "$ZSHRC")" ]; then
@@ -200,7 +199,6 @@ if [ $do_install_nvim = 1 ]; then
         _done "Already installed neovim"
     else
         did_change=1
-        _task "Removing previous installation"
         sudo rm -rf /opt/nvim
 
         _task "Downloading latest neovim release"
@@ -211,8 +209,6 @@ if [ $do_install_nvim = 1 ]; then
         sudo mv /opt/nvim-linux-x86_64 /opt/nvim
         rm -f ~/.local/bin/nvim
         ln -s /opt/nvim/bin/nvim ~/.local/bin/nvim
-
-        _task "Removing install files"
         rm nvim-linux-x86_64.tar.gz
     fi
 fi
@@ -243,7 +239,7 @@ if [ $do_customize = 1 ]; then
     _task "Applying xfconf settings"
     xfconf-query -c xfce4-panel -n -p /panels/panel-1/border-width -t int -s 1
     xfconf-query -c xfwm4 -n -p /general/mousewheel_rollup -t bool -s false
-    xfconf-query -c keyboards -n -p /Default/KeyRepeat/Rate -t int -s 40
+    xfconf-query -c keyboards -n -p /Default/KeyRepeat/Rate -t int -s 32
     xfconf-query -c thunar -n -p /last-show-hidden -t bool -s true
 
     qt5conf="$HOME/.config/qt5ct/qt5ct.conf"
