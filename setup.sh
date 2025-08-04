@@ -84,6 +84,9 @@ if [ "$confirmed" = 1 ]; then
     do_install_go="$confirmed"
 fi
 
+_confirm "Do you want to install additional fonts?"
+do_install_font="$confirmed"
+
 _confirm "Do you want to install neovim?"
 do_install_nvim="$confirmed"
 
@@ -102,6 +105,7 @@ do_cleanup="$confirmed"
 
 echo
 did_change=0
+needs_logout=0
 
 
 if [ $do_update = 1 ]; then
@@ -151,7 +155,7 @@ if [ $do_install_go = 1 ]; then
         sudo rm -rf /opt/go
         _task "Downloading latest golang release"
         GOLANG_LATEST="$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep 'linux-amd64' | head -n1 | awk '{print $2}' | sed 's/"\(.*\)",/\1/')"
-        curl -fsSL -o golang.tar.gz "https://go.dev/dl/$GOLANG_LATEST"
+        curl -fsSLo golang.tar.gz "https://go.dev/dl/$GOLANG_LATEST"
         _task "Installing golang"
         sudo tar -C /opt -xzf golang.tar.gz
         _task "Removing install files"
@@ -164,6 +168,31 @@ if [ $do_install_go = 1 ]; then
             _done "Already configured golang in .zshrc"
         fi
     fi
+fi
+
+if [ $do_install_font = 1 ]; then
+    jbmdir="/usr/local/share/fonts/JetBrainsMonoNF"
+    if [ -d "$jbmdir" ]; then
+        _done "Already installed fonts"
+    else
+        did_change=1
+        _task "Installing font packages"
+        sudo apt install -y fonts-inter fonts-roboto
+
+        _task "Downloading fonts"
+        url="$(curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest | grep 'JetBrainsMono.tar.xz' | grep 'browser_download_url' | awk '{print $2}' | tr -d '"')"
+        jbmtar="jbm.tar.xz"
+        curl -fsSLo jbm.tar.xz "$url"
+
+        _task "Installing fonts"
+        sudo mkdir -p "$jbmdir"
+        sudo tar -C "$jbmdir" --wildcards "JetBrainsMonoNerdFont-*" -xf "$jbmtar"
+        rm "$jbmtar"
+
+        _task "Rebuilding font cache"
+        sudo fc-cache -f
+    fi
+
 fi
 
 if [ $do_install_nvim = 1 ]; then
@@ -203,18 +232,49 @@ fi
 if [ $do_customize = 1 ]; then
     did_change=1
     _task "Installing wallpapers"
-    sudo apt install kali-wallpapers-all
+    sudo apt install -y kali-wallpapers-all
 
     # set wallpaper
     MONITOR_NAME="$(xrandr --listmonitors | grep '^\s*[[:digit:]]' | awk '{print $4}')"
     XFCONF_PROP="/backdrop/screen0/monitor$MONITOR_NAME/workspace0/last-image"
     _task "Setting background image"
-    xfconf-query -c xfce4-desktop -n -p "$XFCONF_PROP" -s "/usr/share/backgrounds/kali-16x9/kali-neon.png"
+    xfconf-query -c xfce4-desktop -n -p "$XFCONF_PROP" -t string -s "/usr/share/backgrounds/kali-16x9/kali-neon.png"
 
     _task "Applying xfconf settings"
     xfconf-query -c xfce4-panel -n -p /panels/panel-1/border-width -t int -s 1
     xfconf-query -c xfwm4 -n -p /general/mousewheel_rollup -t bool -s false
     xfconf-query -c keyboards -n -p /Default/KeyRepeat/Rate -t int -s 40
+    xfconf-query -c thunar -n -p /last-show-hidden -t bool -s true
+
+    qt5conf="$HOME/.config/qt5ct/qt5ct.conf"
+    qt6conf="$HOME/.config/qt6ct/qt6ct.conf"
+    fclist_inter="$(fc-list | grep "Inter")"
+    fclist_jbm="$(fc-list | grep "JetBrainsMono Nerd Font")"
+
+    if [ ! -z "$fclist_inter" ]; then
+        needs_logout=1
+        _task "Setting interface font"
+        xfconf-query -c xfwm4 -n -p /general/title_font -t string -s "Inter Display Bold 9"
+        xfconf-query -c xsettings -n -p /Gtk/FontName -t string -s "Inter Display 11"
+        if [ -f "$qt5conf" ]; then
+            sed -i 's/^general=.*$/general="Inter Display,11,-1,5,50,0,0,0,0,0"/' "$qt5conf"
+        fi
+        if [ -f "$qt6conf" ]; then
+            sed -i 's/^general=.*$/general="Inter Display,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"/' "$qt6conf"
+        fi
+    fi
+    if [ ! -z "$fclist_jbm" ]; then
+        needs_logout=1
+        _task "Setting monospace font"
+        xfconf-query -c xsettings -n -p /Gtk/MonospaceFontName -t string -s "JetBrainsMono Nerd Font 11"
+        if [ -f "$qt5conf" ]; then
+            sed -i 's/^fixed=.*$/fixed="JetBrainsMono Nerd Font,10,-1,5,50,0,0,0,0,0"/' "$qt5conf"
+        fi
+        if [ -f "$qt6conf" ]; then
+            sed -i 's/^fixed=.*$/fixed="JetBrainsMono Nerd Font,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1"/' "$qt6conf"
+        fi
+    fi
+
 
     # set terminal theme
     QTERM_CONF_FILE="$HOME/.config/qterminal.org/qterminal.ini"
@@ -231,13 +291,18 @@ if [ $do_customize = 1 ]; then
         _task "Updating qterminal config"
         sed -i 's/ApplicationTransparency=[[:digit:]]\+/ApplicationTransparency=0/' "$QTERM_CONF_FILE"
         sed -i 's/^colorScheme=.*$/colorScheme=Kali-Custom/' "$QTERM_CONF_FILE"
+
+        if [ ! -z "$fclist_jbm" ]; then
+            sed -i 's/^fontFamily=.*$/fontFamily=JetBrainsMono Nerd Font/' "$QTERM_CONF_FILE"
+            sed -i 's/^fontSize=.*$/fontSize=10/' "$QTERM_CONF_FILE"
+        fi
     fi
 fi
 
 if [ $do_wordlists = 1 ]; then
     did_change=1
     _task "Installing seclists"
-    sudo apt install seclists
+    sudo apt install -y seclists
 
     ROCKYOU_FILE="/usr/share/wordlists/rockyou.txt"
     ROCKYOU_GZ="$ROCKYOU_FILE.gz"
@@ -256,21 +321,33 @@ if [ $do_cleanup = 1 ]; then
     sudo apt clean -y
 fi
 
-# restart qterminal
+_countdown() {
+    seconds=5
+    for ((i=seconds; i>0; i--)); do
+        echo -ne "\r${ylw}$1 in $i seconds...${rst} "
+        sleep 1
+    done
+    echo
+}
+
+# check if user needs to logout or restart terminal
+# always confirm these, regardless of -y option
+noconfirm=0
+if [ $needs_logout = 1 ]; then
+    echo -e "\n${cyn}${bld}Some settings will not take effect until you logout$rst"
+    _confirm "Do you want to logout now?"
+    if [ $confirmed = 1 ]; then
+        _countdown "Logging out"
+        xfce4-session-logout --logout
+        exit 0
+    fi
+fi
 if [ $did_change = 1 ]; then
+    echo -e "\n${cyn}${bld}Some settings will not take effect until you relaunch the terminal$rst"
     if [ ! -z "$(pgrep qterminal 2>/dev/null)" ]; then
-        echo
         _confirm "Do you want to restart the terminal?"
         if [ $confirmed = 1 ]; then
-
-            # countdown to restart
-            seconds=5
-            for ((i=seconds; i>0; i--)); do
-                echo -ne "\r${ylw}Restarting the terminal in $i seconds...${rst} "
-                sleep 1
-            done
-            echo
-
+            _countdown "Restarting the terminal"
             _p="$(pgrep qterminal | tr '\n' ' ')"
             _w="$(pwd)"
             qterminal -w "$_w" &
