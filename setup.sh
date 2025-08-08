@@ -106,6 +106,19 @@ do_cleanup="$confirmed"
 echo
 did_change=0
 needs_logout=0
+pkg_list="git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential joplin"
+
+if [ $do_customize = 1 ]; then
+    pkg_list+=" kali-wallpapers-all"
+fi
+
+if [ $do_install_font = 1 ]; then
+    pkg_list+=" fonts-inter fonts-roboto"
+fi
+
+if [ $do_wordlists = 1 ]; then
+    pkg_list+=" seclists"
+fi
 
 
 if [ $do_update = 1 ]; then
@@ -117,7 +130,7 @@ fi
 if [ $do_install_pkgs = 1 ]; then
     did_change=1
     _task "Installing packages"
-    sudo apt install -y git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential joplin
+    sudo apt install -y $pkg_list
 
     if [ -z "$(grep 'source <(fzf --zsh)' "$ZSHRC")" ]; then
         _task "Add fzf key bindings"
@@ -187,8 +200,6 @@ if [ $do_install_font = 1 ]; then
         _done "Already installed fonts"
     else
         did_change=1
-        _task "Installing font packages"
-        sudo apt install -y fonts-inter fonts-roboto
 
         _task "Downloading fonts"
         url="$(curl -fsSL https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest | grep 'JetBrainsMono.tar.xz' | grep 'browser_download_url' | awk '{print $2}' | tr -d '"')"
@@ -246,8 +257,6 @@ fi
 
 if [ $do_customize = 1 ]; then
     did_change=1
-    _task "Installing wallpapers"
-    sudo apt install -y kali-wallpapers-all
 
     # set wallpaper
     MONITOR_NAME="$(xrandr --listmonitors | grep '^\s*[[:digit:]]' | awk '{print $4}')"
@@ -316,7 +325,7 @@ if [ $do_customize = 1 ]; then
     fi
 
     # joplin launcher
-    if command -v joplin &> /dev/null; then
+    if [ $do_install_pkgs = 1 ]; then
         joplin_launcher="$(grep -r joplin ~/.config/xfce4/panel)"
         if [ ! -z "$joplin_launcher" ]; then
             _done "Already created Joplin launcher"
@@ -352,10 +361,6 @@ EOF
 fi
 
 if [ $do_wordlists = 1 ]; then
-    did_change=1
-    _task "Installing seclists"
-    sudo apt install -y seclists
-
     ROCKYOU_FILE="/usr/share/wordlists/rockyou.txt"
     ROCKYOU_GZ="$ROCKYOU_FILE.gz"
     if [ ! -f "$ROCKYOU_FILE" ]; then
@@ -367,7 +372,6 @@ if [ $do_wordlists = 1 ]; then
 fi
 
 if [ $do_cleanup = 1 ]; then
-    did_change=1
     _task "Cleaning apt packages"
     sudo apt autoremove -y
     sudo apt clean -y
