@@ -117,7 +117,7 @@ fi
 if [ $do_install_pkgs = 1 ]; then
     did_change=1
     _task "Installing packages"
-    sudo apt install -y git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential
+    sudo apt install -y git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential joplin
 
     if [ -z "$(grep 'source <(fzf --zsh)' "$ZSHRC")" ]; then
         _task "Add fzf key bindings"
@@ -312,6 +312,41 @@ if [ $do_customize = 1 ]; then
         if [ ! -z "$fclist_jbm" ]; then
             sed -i 's/^fontFamily=.*$/fontFamily=JetBrainsMono Nerd Font/' "$QTERM_CONF_FILE"
             sed -i 's/^fontSize=.*$/fontSize=10/' "$QTERM_CONF_FILE"
+        fi
+    fi
+
+    # joplin launcher
+    if command -v joplin &> /dev/null; then
+        joplin_launcher="$(grep -r joplin ~/.config/xfce4/panel)"
+        if [ ! -z "$joplin_launcher" ]; then
+            _done "Already created Joplin launcher"
+        else
+            _task "Creating Joplin launcher"
+            plugid=$(( $(xfconf-query -c xfce4-panel -l | grep '/plugins/plugin-[0-9][0-9]\?$' | cut -d '-' -f2 | sort -n | tail -n1) + 1 ))
+            if [ $plugid = 1 ]; then
+                _warn "could not get plugin id to create new launcher"
+            else
+                plugpath="$HOME/.config/xfce4/panel/launcher-$plugid"
+                mkdir -p "$plugpath"
+                desktopfile="$plugpath/$(date +%s).desktop"
+                cat << EOF > "$desktopfile"
+[Desktop Entry]
+Name=Joplin
+Comment=A note taking and to-do application with synchronization capabilities
+Encoding=UTF-8
+Exec=/usr/bin/joplin
+Icon=joplin
+Type=Application
+Categories=Utility;TextEditor;
+X-XFCE-Source=file:///usr/share/applications/joplin.desktop
+EOF
+                xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid" -t string -s launcher
+                xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid/items" -a -t string -s "$desktopfile"
+                # for now, we just hardcode the launcher after the 5th item, which is usually text editor
+                cmdargs="$(xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids | grep '^[0-9]' | awk '{ printf "%s ", $0 }' | sed "s/ 5 / $plugid\0/" | tr ' ' '\n' |  awk '{ printf " -t int -s %s", $0 }')"
+                eval "xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -n -a $cmdargs"
+                xfce4-panel --restart
+            fi
         fi
     fi
 fi
