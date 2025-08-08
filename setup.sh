@@ -153,18 +153,30 @@ if [ $do_install_go = 1 ]; then
         did_change=1
         sudo rm -rf /opt/go
 
-        _task "Downloading latest golang release"
-        GOLANG_LATEST="$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep 'linux-amd64' | head -n1 | awk '{print $2}' | sed 's/"\(.*\)",/\1/')"
-        curl -fsSLo golang.tar.gz "https://go.dev/dl/$GOLANG_LATEST"
-        _task "Installing golang"
-        sudo tar -C /opt -xzf golang.tar.gz
-        rm golang.tar.gz
+        # disable these because go server seems to have problems sometimes
+        set +eo pipefail
 
-        if [ -z "$(grep 'export PATH=$PATH:/opt/go/bin' "$ZSHRC")" ]; then
-            _task "Add golang to PATH"
-            echo -e "\nexport PATH=\$PATH:/opt/go/bin" >> "$ZSHRC"
+        _task "Downloading latest golang release"
+        golang_latest="$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep 'linux-amd64' | head -n1 | awk '{print $2}' | sed 's/"\(.*\)",/\1/')"
+        golang_archive="golang.tar.gz"
+        curl -fsSLo "$golang_archive" "https://go.dev/dl/$golang_latest"
+
+        # enable after attempting download
+        set -eo pipefail
+
+        if [ -f "$golang_archive" ]; then
+            _task "Installing golang"
+            sudo tar -C /opt -xzf "$golang_archive"
+            rm "$golang_archive"
+
+            if [ -z "$(grep 'export PATH=$PATH:/opt/go/bin' "$ZSHRC")" ]; then
+                _task "Add golang to PATH"
+                echo -e "\nexport PATH=\$PATH:/opt/go/bin" >> "$ZSHRC"
+            else
+                _done "Already configured golang in .zshrc"
+            fi
         else
-            _done "Already configured golang in .zshrc"
+            _warn "failed to download golang archive, skipping"
         fi
     fi
 fi
@@ -241,6 +253,8 @@ if [ $do_customize = 1 ]; then
     xfconf-query -c xfwm4 -n -p /general/mousewheel_rollup -t bool -s false
     xfconf-query -c keyboards -n -p /Default/KeyRepeat/Rate -t int -s 32
     xfconf-query -c thunar -n -p /last-show-hidden -t bool -s true
+    xfconf-query -c xfce4-screensaver -n -p /saver/idle-activation/delay -t int -s 10
+    xfconf-query -c xfce4-screensaver -n -p /saver/mode -t int -s 0
 
     qt5conf="$HOME/.config/qt5ct/qt5ct.conf"
     qt6conf="$HOME/.config/qt6ct/qt6ct.conf"
