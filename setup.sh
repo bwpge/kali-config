@@ -231,10 +231,17 @@ if [ $do_dotfiles = 1 ]; then
         _task "Updating neovim config"
         git -C ~/.config/nvim pull
     else
-        _task "Setting up neovim config"
+        _task "Creating neovim config"
         mkdir -p ~/.config
         git clone https://github.com/bwpge/nvim-config.git ~/.config/nvim
     fi
+
+    if [ -f ~/.tmux.conf ]; then
+        _task "Updating tmux config"
+    else
+        _task "Creating tmux config"
+    fi
+    curl -fsSL https://raw.githubusercontent.com/bwpge/dotfiles/refs/heads/main/.tmux.conf > ~/.tmux.conf
 fi
 
 if [ $do_customize = 1 ]; then
