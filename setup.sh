@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -euo pipefail
+set -u
 
 bld='\033[1m'
 red='\033[0;31m'
@@ -140,6 +140,12 @@ if [ $do_install_pkgs = 1 ]; then
     fi
 fi
 
+if [ $do_cleanup = 1 ]; then
+    _task "Cleaning apt packages"
+    sudo apt autoremove -y
+    sudo apt clean -y
+fi
+
 if [ $do_install_rust = 1 ]; then
     if command -v rustc &> /dev/null; then
         _done "Rust already installed"
@@ -166,16 +172,10 @@ if [ $do_install_go = 1 ]; then
         did_change=1
         sudo rm -rf /opt/go
 
-        # disable these because go server seems to have problems sometimes
-        set +eo pipefail
-
         _task "Downloading latest golang release"
         golang_latest="$(curl -fsSL 'https://go.dev/dl/?mode=json' | grep 'linux-amd64' | head -n1 | awk '{print $2}' | sed 's/"\(.*\)",/\1/')"
         golang_archive="golang.tar.gz"
         curl -fsSLo "$golang_archive" "https://go.dev/dl/$golang_latest"
-
-        # enable after attempting download
-        set -eo pipefail
 
         if [ -f "$golang_archive" ]; then
             _task "Installing golang"
@@ -259,7 +259,7 @@ if [ $do_customize = 1 ]; then
     did_change=1
 
     # set wallpaper
-    MONITOR_NAME="$(xrandr --listmonitors | grep '^\s*[[:digit:]]' | awk '{print $4}')"
+    MONITOR_NAME="$(xrandr --listmonitors | grep '^\s*[0-9]' | awk '{print $4}')"
     XFCONF_PROP="/backdrop/screen0/monitor$MONITOR_NAME/workspace0/last-image"
     _task "Setting background image"
     xfconf-query -c xfce4-desktop -n -p "$XFCONF_PROP" -t string -s "/usr/share/backgrounds/kali-16x9/kali-neon.png"
@@ -326,8 +326,8 @@ if [ $do_customize = 1 ]; then
 
     # joplin launcher
     if [ $do_install_pkgs = 1 ]; then
-        joplin_launcher="$(grep -r joplin ~/.config/xfce4/panel)"
-        if [ ! -z "$joplin_launcher" ]; then
+
+        if grep -qr joplin "$HOME/.config/xfce4/panel"; then
             _done "Already created Joplin launcher"
         else
             _task "Creating Joplin launcher"
@@ -369,12 +369,6 @@ if [ $do_wordlists = 1 ]; then
     else
         _done "Already extracted rockyou.txt"
     fi
-fi
-
-if [ $do_cleanup = 1 ]; then
-    _task "Cleaning apt packages"
-    sudo apt autoremove -y
-    sudo apt clean -y
 fi
 
 _countdown() {
