@@ -90,6 +90,9 @@ do_install_font="$confirmed"
 _confirm "Do you want to install neovim?"
 do_install_nvim="$confirmed"
 
+_confirm "Do you want to install joplin?"
+do_install_joplin="$confirmed"
+
 _confirm "Do you want to update dotfiles?"
 do_dotfiles="$confirmed"
 
@@ -106,7 +109,7 @@ do_cleanup="$confirmed"
 echo
 did_change=0
 needs_logout=0
-pkg_list="git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential joplin"
+pkg_list="git jq tree tmux ripgrep fzf bat ninja-build gettext cmake build-essential"
 
 if [ $do_customize = 1 ]; then
     pkg_list+=" kali-wallpapers-all"
@@ -114,6 +117,10 @@ fi
 
 if [ $do_install_font = 1 ]; then
     pkg_list+=" fonts-inter fonts-roboto"
+fi
+
+if [ $do_install_joplin = 1 ]; then
+    pkg_list+=" joplin"
 fi
 
 if [ $do_wordlists = 1 ]; then
@@ -256,6 +263,55 @@ if [ $do_dotfiles = 1 ]; then
     curl -fsSL https://raw.githubusercontent.com/bwpge/dotfiles/refs/heads/main/.tmux.conf > ~/.tmux.conf
 fi
 
+if [ $do_install_joplin = 1 ]; then
+    if grep -qr joplin "$HOME/.config/xfce4/panel"; then
+        _done "Already created Joplin launcher"
+    else
+        needs_logout=1
+
+        _task "Creating Joplin launcher"
+        plugid=$(( $(xfconf-query -c xfce4-panel -l | grep '/plugins/plugin-[0-9][0-9]\?$' | cut -d '-' -f2 | sort -n | tail -n1) + 1 ))
+        if [ $plugid = 1 ]; then
+            _warn "could not get plugin id to create new launcher"
+        else
+            plugpath="$HOME/.config/xfce4/panel/launcher-$plugid"
+            mkdir -p "$plugpath"
+            desktopfile="$plugpath/$(date +%s).desktop"
+            cat << EOF > "$desktopfile"
+[Desktop Entry]
+Name=Joplin
+Comment=A note taking and to-do application with synchronization capabilities
+Encoding=UTF-8
+Exec=/usr/bin/joplin
+Icon=joplin
+Type=Application
+Categories=Utility;TextEditor;
+X-XFCE-Source=file:///usr/share/applications/joplin.desktop
+EOF
+            xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid" -t string -s launcher
+            xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid/items" -a -t string -s "$desktopfile"
+            # for now, we just hardcode the launcher after the 5th item, which is usually text editor
+            cmdargs="$(xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids | grep '^[0-9]' | awk '{ printf "%s ", $0 }' | sed "s/ 5 / $plugid\0/" | tr ' ' '\n' |  awk '{ printf " -t int -s %s", $0 }')"
+            eval "xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -n -a $cmdargs"
+            xfce4-panel --restart
+        fi
+    fi
+
+    joplin_plugdir="$HOME/.config/joplin-desktop/plugins"
+    mkdir -p "$joplin_plugdir"
+
+    plugs=("joplin.plugin.templates@2.4.0" "com.whatever.quick-links@1.3.2" "outline@1.5.14")
+    for p in ${plugs[@]}; do
+        outfile="$joplin_plugdir/$(echo -n "$p" | cut -d '@' -f1).jpl"
+        if [ ! -f "$outfile" ]; then
+            _task "Installing plugin: $p"
+            curl -fsSLo "$outfile" "https://github.com/joplin/plugins/releases/download/plugins/$p.jpl"
+        else
+            _done "Already installed plugin: $p"
+        fi
+    done
+fi
+
 if [ $do_customize = 1 ]; then
     did_change=1
 
@@ -322,41 +378,6 @@ if [ $do_customize = 1 ]; then
         if [ ! -z "$fclist_jbm" ]; then
             sed -i 's/^fontFamily=.*$/fontFamily=JetBrainsMono Nerd Font/' "$QTERM_CONF_FILE"
             sed -i 's/^fontSize=.*$/fontSize=10/' "$QTERM_CONF_FILE"
-        fi
-    fi
-
-    # joplin launcher
-    if [ $do_install_pkgs = 1 ]; then
-
-        if grep -qr joplin "$HOME/.config/xfce4/panel"; then
-            _done "Already created Joplin launcher"
-        else
-            _task "Creating Joplin launcher"
-            plugid=$(( $(xfconf-query -c xfce4-panel -l | grep '/plugins/plugin-[0-9][0-9]\?$' | cut -d '-' -f2 | sort -n | tail -n1) + 1 ))
-            if [ $plugid = 1 ]; then
-                _warn "could not get plugin id to create new launcher"
-            else
-                plugpath="$HOME/.config/xfce4/panel/launcher-$plugid"
-                mkdir -p "$plugpath"
-                desktopfile="$plugpath/$(date +%s).desktop"
-                cat << EOF > "$desktopfile"
-[Desktop Entry]
-Name=Joplin
-Comment=A note taking and to-do application with synchronization capabilities
-Encoding=UTF-8
-Exec=/usr/bin/joplin
-Icon=joplin
-Type=Application
-Categories=Utility;TextEditor;
-X-XFCE-Source=file:///usr/share/applications/joplin.desktop
-EOF
-                xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid" -t string -s launcher
-                xfconf-query -c xfce4-panel -n -p "/plugins/plugin-$plugid/items" -a -t string -s "$desktopfile"
-                # for now, we just hardcode the launcher after the 5th item, which is usually text editor
-                cmdargs="$(xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids | grep '^[0-9]' | awk '{ printf "%s ", $0 }' | sed "s/ 5 / $plugid\0/" | tr ' ' '\n' |  awk '{ printf " -t int -s %s", $0 }')"
-                eval "xfconf-query -c xfce4-panel -p /panels/panel-1/plugin-ids -n -a $cmdargs"
-                xfce4-panel --restart
-            fi
         fi
     fi
 fi
