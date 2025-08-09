@@ -246,6 +246,7 @@ if [ $do_dotfiles = 1 ]; then
         mkdir -p ~/.config
         git clone https://github.com/bwpge/nvim-config.git ~/.config/nvim
     fi
+    nvim --headless '+Lazy! sync' '+Lazy! load mason-tool-installer.nvim' '+MasonToolsInstallSync' +qa
 
     if [ -f ~/.tmux.conf ]; then
         _task "Updating tmux config"
